@@ -11,6 +11,8 @@ import Control.Monad.Error.Either
 import Utils.Bytes
 import Utils.Streaming
 
+import Debug.Trace
+
 import public Data.Compress.Deflate
 
 ifA : Applicative f => Bool -> Lazy (f a) -> f (Maybe a)

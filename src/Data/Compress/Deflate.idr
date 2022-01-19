@@ -12,6 +12,8 @@ import Utils.Bytes
 import Utils.Streaming
 import Control.Monad.Error.Either
 
+import Debug.Trace
+
 match_off, dist_off : List Nat
 match_extra, dist_extra : List (Fin 32)
 
@@ -71,7 +73,7 @@ parse_deflate_uncompressed_length = do
 parse_deflate_uncompressed : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
 parse_deflate_uncompressed buffer = do
   len <- parse_deflate_uncompressed_length
-  new_data <- toList <$> ntimes len (yield next_byte)
+  new_data <- toList <$> ntimes len (next_byte >>= (\b => yield b $> b))
   pure (buffer <>< new_data)
 
 parse_deflate_code_lengths : Monad m => Bits32 -> Maybe Bits32 -> BParser (Either e String) r m (Fin 19) ->
@@ -120,7 +122,7 @@ parse_deflate_dynamic_huffman = do
 parse_deflate_huffman : Monad m => HuffmanTree e r m -> SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
 parse_deflate_huffman tree buffer = do
   x <- tree.parse_literals
-  if x < 256 then parse_deflate_huffman tree (buffer :< cast x)
+  if x < 256 then yield (cast x) *> parse_deflate_huffman tree (buffer :< cast x)
     else if x == 256 then pure buffer
     else if x < 286 then do
       let Just (off, extra) = length_lookup (cast (x - 257))
@@ -135,7 +137,7 @@ parse_deflate_huffman tree buffer = do
       let Just copied_chunk = take_last distance buffer
       | Nothing => fail $ Right "asked for distance \{show distance} but only \{show (SnocList.length buffer)} in buffer"
       let appended = take length $ stream_concat $ repeat copied_chunk
-      parse_deflate_huffman tree (buffer <>< appended)
+      yieldm appended *> parse_deflate_huffman tree (buffer <>< appended)
     else fail $ Right "invalid code \{show x} encountered"
 
 parse_deflate_dynamic : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
@@ -148,14 +150,14 @@ parse_deflate_block acc = do
   final <- next_bit
   method <- ntimes 2 next_bit
   map (final,) $ case method of
-    [False, False] => parse_deflate_uncompressed acc
-    [True , False] => parse_deflate_huffman default_tree acc
-    [False, True ] => parse_deflate_dynamic acc
+    [False, False] => trace "uncompressed" $ parse_deflate_uncompressed acc
+    [True , False] => trace "fixed" $ parse_deflate_huffman default_tree acc
+    [False, True ] => trace "dynamic" $ parse_deflate_dynamic acc
     _ => fail $ Right "invalid compression method"
 
 export
 parse_deflate : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
-parse_deflate acc = parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate new)
+parse_deflate acc = trace "hi" $ parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate new)
 
 export
 decompress_deflate : Monad m => Stream (Of Bits8) m (Either e r) -> Stream (Of Bits8) m (Either (Either (Either e String) r) ())

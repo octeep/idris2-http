@@ -124,18 +124,12 @@ le_nat : Monad m => Nat -> BParser e r m Nat
 le_nat n = cast . le_to_integer <$> ntimes n next_byte
 
 export
-yield : Monad m => BParser e r m Bits8 -> BParser e r m Bits8
-yield parser = P $ \stream =>
-  case !(parser.run_parser stream) of
-    Ok f' s' => yield f' $> Ok f' s'
-    Fail err => pure $ Fail err
+yield : Monad m => Bits8 -> BParser e r m ()
+yield byte = P $ \stream => yield byte $> Ok () stream
 
 export
-yieldm : (Foldable t, Monad m) => BParser e r m (t Bits8) -> BParser e r m (t Bits8)
-yieldm parser = P $ \stream =>
-  case !(parser.run_parser stream) of
-    Ok f' s' => traverse_ yield f' $> Ok f' s'
-    Fail err => pure $ Fail err
+yieldm : (Foldable t, Monad m) => t Bits8 -> BParser e r m ()
+yieldm bytes = P $ \stream => traverse_ yield bytes $> Ok () stream
 
 export
 get_bit : (Monad m, Num n) => BParser e r m n

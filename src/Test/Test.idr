@@ -30,7 +30,8 @@ maybe_to_either _ (Just a) = Right a
 
 test_gzip_file : String -> IO (Either String ())
 test_gzip_file path = withFile path Read (pure . show) $ \file => runEitherT $ do
-  uncompressed <- lift $ toList_ $ decompress_gzip (fromFile file)
+  (uncompressed, thing) <- lift $ toList $ decompress_gzip (fromFile file)
+  printLn thing
   putStrLn $ ascii_to_string uncompressed
   -- printLn footer.isize
   -- putStrLn "exepected: \{show footer.crc32}"
