@@ -12,17 +12,36 @@ import Data.Compress.Utils.Bitstream
 import Utils.Bytes
 import Data.Vect
 import Utils.Streaming
+import System.File.Support
 
 %default partial
+
+%foreign support "idris2_readBufferData"
+         "node:lambda:(f,b,l,m) => require('fs').readSync(f.fd,b,l,m)"
+prim__readBufferData : FilePtr -> Buffer -> (offset : Int) -> (maxbytes : Int) -> PrimIO Int
+
+readBufferData : HasIO io => (fh : File) -> (buf : Buffer) ->
+                 (offset : Int) ->
+                 (maxbytes : Int) ->
+                 io (Either FileError Int)
+readBufferData (FHandle h) buf offset max
+    = do read <- primIO (prim__readBufferData h buf offset max)
+         if read >= 0
+            then pure (Right read)
+            else pure (Left FileReadError)
 
 ||| Construct a `Stream` reading from a File
 export
 fromFile : HasIO m => File -> Stream (Of Bits8) m (Either FileError ())
-fromFile file = do
-  Right a <- liftIO $ fGetChar file
+fromFile file = (newBuffer 8192) >>= loop where
+  loop : Maybe Buffer -> Stream (Of Bits8) m (Either FileError ())
+  loop (Just buffer) = do
+    False <- liftIO $ fEOF file
+    | True => pure (Right ())
+    Right cap <- liftIO (rawSize buffer >>= Test.readBufferData file buffer 0)
     | Left err => pure (Left err)
-  eof <- liftIO $ fEOF file
-  if eof then pure (Right ()) else yield (cast $ ord a) *> fromFile file
+    data' <- traverse (getBits8 buffer) [0..(cap-1)]
+    fromList_ data' *> loop (Just buffer)
 
 maybe_to_either : Lazy b -> Maybe a -> Either b a
 maybe_to_either b Nothing = Left $ Force b

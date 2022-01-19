@@ -15,9 +15,6 @@ import Debug.Trace
 
 import public Data.Compress.Deflate
 
-ifA : Applicative f => Bool -> Lazy (f a) -> f (Maybe a)
-ifA bool action = if bool then Just <$> action else pure Nothing
-
 export
 parse_gzip_header : Monad m => BParser (Either e String) r m Bool
 parse_gzip_header = do

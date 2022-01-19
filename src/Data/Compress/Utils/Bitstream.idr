@@ -42,20 +42,30 @@ Functor m => Functor (BParser e r m) where
   map f p = P $ \s => map (map f) (p.run_parser s)
 
 public export
-Monad m => Applicative (BParser e r m) where
-  pure x = P $ \s =>
-    pure $ Ok x s
-  f <*> x = P $ \s =>
-    case !(f.run_parser s) of
-      Ok f' s' => map (map f') (x.run_parser s')
-      Fail err => pure $ Fail err
+pure : Monad m => a -> BParser e r m a
+pure x = P $ \s => pure $ Ok x s
 
 public export
-Monad m => Monad (BParser e r m) where
-  m >>= k = P $ \s => assert_total $
-    (m.run_parser s) >>= \case
-      Ok a s' => (k a).run_parser s'
-      Fail err => pure $ Fail err
+(<*>) : Monad m => BParser e r m (a -> b) -> Lazy (BParser e r m a) -> BParser e r m b
+f <*> x = P $ \s =>
+  case !(f.run_parser s) of
+    Ok f' s' => map (map f') (x.run_parser s')
+    Fail err => pure $ Fail err
+
+public export
+(<*) : Monad m =>  BParser e r m a -> BParser e r m b -> BParser e r m a
+x <* y = map const x <*> y
+
+public export
+(*>) : Monad m => BParser e r m a -> BParser e r m b ->  BParser e r m b
+x *> y = map (const id) x <*> y
+
+public export
+(>>=) : Monad m => BParser e r m a -> (a -> BParser e r m b) -> BParser e r m b
+m >>= k = P $ \s => assert_total $
+  (m.run_parser s) >>= \case
+    Ok a s' => (k a).run_parser s'
+    Fail err => pure $ Fail err
 
 public export
 MonadTrans (BParser e r) where
@@ -99,7 +109,7 @@ fail err = P $ \_ => pure $ Fail $ Left err
 
 export
 ntimes : Monad m => (n : Nat) -> BParser e r m a -> BParser e r m (Vect n a)
-ntimes    Z  p = pure Vect.Nil
+ntimes    Z  p = pure []
 ntimes (S n) p = [| p :: (ntimes n p) |]
 
 fin_range : (n : Nat) -> List (Fin n)
@@ -128,8 +138,8 @@ yield : Monad m => Bits8 -> BParser e r m ()
 yield byte = P $ \stream => yield byte $> Ok () stream
 
 export
-yieldm : (Foldable t, Monad m) => t Bits8 -> BParser e r m ()
-yieldm bytes = P $ \stream => traverse_ yield bytes $> Ok () stream
+yieldm : Monad m => List Bits8 -> BParser e r m ()
+yieldm bytes = P $ \stream => fromList_ bytes $> Ok () stream
 
 export
 get_bit : (Monad m, Num n) => BParser e r m n
@@ -138,3 +148,13 @@ get_bit = map (\b => if b then 1 else 0) next_bit
 export
 skip_till : Monad m => (Bits8 -> Bool) -> BParser e r m ()
 skip_till f = next_byte >>= (\x => if f x then pure () else skip_till f)
+
+export
+for : Monad m => List a -> (a -> BParser e r m b) -> BParser e r m (List b)
+for []        f = pure []
+for (x :: xs) f = [| f x :: for xs f |]
+
+export
+ifA : Monad m => Bool -> Lazy (BParser e r m a) -> BParser e r m (Maybe a)
+ifA bool action = if bool then Just <$> action else pure Nothing
+

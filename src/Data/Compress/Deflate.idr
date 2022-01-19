@@ -127,7 +127,7 @@ parse_deflate_huffman tree buffer = do
     else if x < 286 then do
       let Just (off, extra) = length_lookup (cast (x - 257))
       | Nothing => fail $ Right "length symbol out of bound"
-      length <- map (\b => off + cast b) (get_bits extra)
+      length' <- map (\b => off + cast b) (get_bits extra)
       dcode <- tree.parse_distance
 
       let Just (off, extra) = distance_lookup (cast dcode)
@@ -135,9 +135,9 @@ parse_deflate_huffman tree buffer = do
       distance <- map (\b => off + cast b) (get_bits extra)
     
       let Just copied_chunk = take_last distance buffer
-      | Nothing => fail $ Right "asked for distance \{show distance} but only \{show (SnocList.length buffer)} in buffer"
-      let appended = take length $ stream_concat $ repeat copied_chunk
-      yieldm appended *> parse_deflate_huffman tree (buffer <>< appended)
+      | Nothing => fail $ Right "asked for distance \{show distance} but only \{show (length buffer)} in buffer"
+      let appended = take length' $ stream_concat $ repeat copied_chunk
+      trace (show $ length buffer) $ yieldm appended *> parse_deflate_huffman tree (buffer <>< appended)
     else fail $ Right "invalid code \{show x} encountered"
 
 parse_deflate_dynamic : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
@@ -150,14 +150,14 @@ parse_deflate_block acc = do
   final <- next_bit
   method <- ntimes 2 next_bit
   map (final,) $ case method of
-    [False, False] => trace "uncompressed" $ parse_deflate_uncompressed acc
-    [True , False] => trace "fixed" $ parse_deflate_huffman default_tree acc
-    [False, True ] => trace "dynamic" $ parse_deflate_dynamic acc
+    [False, False] => parse_deflate_uncompressed acc
+    [True , False] => parse_deflate_huffman default_tree acc
+    [False, True ] => parse_deflate_dynamic acc
     _ => fail $ Right "invalid compression method"
 
 export
 parse_deflate : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
-parse_deflate acc = trace "hi" $ parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate new)
+parse_deflate acc = parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate new)
 
 export
 decompress_deflate : Monad m => Stream (Of Bits8) m (Either e r) -> Stream (Of Bits8) m (Either (Either (Either e String) r) ())
