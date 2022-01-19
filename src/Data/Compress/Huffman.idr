@@ -7,8 +7,8 @@ import Data.List1
 import Data.Bits
 import Data.Stream
 import Data.Compress.Utils.Misc
-import Data.Compress.Utils.Parser
 
+public export
 data Tree : Type -> Type where
   Node : Tree a -> Tree a -> Tree a
   Leaf : a -> Tree a
@@ -58,6 +58,7 @@ decompose_bits32 i (FS n) = testBit i (FS n) :: decompose_bits32 i (weaken n)
 decompose_l_i : Bits32 -> Bits32 -> Maybe (List Bool)
 decompose_l_i l i = decompose_bits32 i <$> natToFin (cast (l-1)) 32 
 
+{-
 public export
 record HuffmanTree where
   constructor MkTree
@@ -82,9 +83,10 @@ tree_to_parser (Leaf (Just v)) = pure v
 tree_to_parser (Node false true) = do
   b <- token
   if b then tree_to_parser true else tree_to_parser false
+-}
 
 export
-make_tree : Ord a => List (a, Bits32) -> Nat -> Maybe (Parser Bitstream (SimpleError String) a)
+make_tree : Ord a => List (a, Bits32) -> Nat -> Maybe (Tree (Maybe a))
 make_tree elem_code_length max_n_code = do
   let elem_code_length = filter (\(a,b) => b > 0) $ sortBy (\a,b => compare (fst a) (fst b)) elem_code_length
   let code_length = map snd elem_code_length
@@ -103,4 +105,4 @@ make_tree elem_code_length max_n_code = do
   
   b_tree <- foldlM (\t,(p,v) => insert p v t) (uncurry mk elem_code_head) elem_code_tail
 
-  pure $ tree_to_parser b_tree
+  pure b_tree

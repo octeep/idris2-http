@@ -6,7 +6,6 @@ import Data.List
 import Data.Bits
 import Data.List1
 import Data.SnocList
-import Data.Compress.Utils.ParseT
 
 export
 take_last : Nat -> SnocList a -> Maybe (List a)
@@ -26,25 +25,6 @@ index_may : Nat -> List a -> Maybe a
 index_may Z (x :: xs) = Just x
 index_may (S n) (x :: xs) = index_may n xs
 index_may _ [] = Nothing
-
-export
-get_bit : Num n => Parser Bitstream (SimpleError String) n
-get_bit = map (\b => if b then 1 else 0) token
-
-fin_range : (n : Nat) -> List (Fin n)
-fin_range _ = toList Fin.range
-
-export
-get_huff, get_bits : Fin 32 -> Parser Bitstream (SimpleError String) Bits32
-get_bits n = do
-  let n' = finToNat n
-  bits <- count n' token
-  pure $ foldl (\a,(i,b) => if b then setBit a i else a) 0 $ zip (fin_range 32) (toList bits)
-
-get_huff n = do
-  let n' = finToNat n
-  bits <- count n' token
-  pure $ foldl (\a,(i,b) => if b then setBit a i else a) 0 $ zip (fin_range 32) (reverse $ toList bits)
 
 export
 count : Ord a => List a -> List (a, Nat)
