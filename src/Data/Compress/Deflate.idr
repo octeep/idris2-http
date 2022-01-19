@@ -153,9 +153,10 @@ parse_deflate_block acc = do
     [False, True ] => parse_deflate_dynamic acc
     _ => fail $ Right "invalid compression method"
 
-parse_deflate' : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
-parse_deflate' acc = parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate' new)
+export
+parse_deflate : Monad m => SnocList Bits8 -> BParser (Either e String) r m (SnocList Bits8)
+parse_deflate acc = parse_deflate_block acc >>= (\(f,new) => if f then pure new else parse_deflate new)
 
 export
 decompress_deflate : Monad m => Stream (Of Bits8) m (Either e r) -> Stream (Of Bits8) m (Either (Either (Either e String) r) ())
-decompress_deflate stream = map to_either $ (parse_deflate' Lin $> ()).run_parser $ from_bytestream $ map (mapFst Left) stream 
+decompress_deflate stream = map to_either $ (parse_deflate Lin $> ()).run_parser $ from_bytestream $ map (mapFst Left) stream 

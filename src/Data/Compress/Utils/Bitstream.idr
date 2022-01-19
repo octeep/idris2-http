@@ -6,6 +6,7 @@ import Data.Bits
 import Data.List
 import Utils.Bytes
 import Utils.Streaming
+import Utils.String
 import Control.Monad.Error.Either
 import Control.Monad.Trans
 
@@ -139,3 +140,7 @@ yieldm parser = P $ \stream =>
 export
 get_bit : (Monad m, Num n) => BParser e r m n
 get_bit = map (\b => if b then 1 else 0) next_bit
+
+export
+skip_till : Monad m => (Bits8 -> Bool) -> BParser e r m ()
+skip_till f = next_byte >>= (\x => if f x then pure () else skip_till f)
