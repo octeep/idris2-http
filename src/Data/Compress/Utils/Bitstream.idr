@@ -38,7 +38,7 @@ record BParser (e : Type) (r : Type) (m : Type -> Type) (a : Type) where
   run_parser : Bitstream m e r -> Stream (Of Bits8) m (Result m e r a)
 
 public export
-Functor m => Functor (BParser e r m) where
+Monad m => Functor (BParser e r m) where
   map f p = P $ \s => map (map f) (p.run_parser s)
 
 public export
@@ -46,18 +46,18 @@ pure : Monad m => a -> BParser e r m a
 pure x = P $ \s => pure $ Ok x s
 
 public export
-(<*>) : Monad m => BParser e r m (a -> b) -> Lazy (BParser e r m a) -> BParser e r m b
+(<*>) : Monad m => Lazy (BParser e r m (a -> b)) -> Lazy (BParser e r m a) -> BParser e r m b
 f <*> x = P $ \s =>
   case !(f.run_parser s) of
     Ok f' s' => map (map f') (x.run_parser s')
     Fail err => pure $ Fail err
 
 public export
-(<*) : Monad m =>  BParser e r m a -> BParser e r m b -> BParser e r m a
+(<*) : Monad m =>  BParser e r m a -> Lazy (BParser e r m b) -> BParser e r m a
 x <* y = map const x <*> y
 
 public export
-(*>) : Monad m => BParser e r m a -> BParser e r m b ->  BParser e r m b
+(*>) : Monad m => BParser e r m a -> Lazy (BParser e r m b) -> BParser e r m b
 x *> y = map (const id) x <*> y
 
 public export
@@ -104,13 +104,13 @@ next_byte = P $ \case
     pure $ Ok byte (from_bytestream rest)
 
 export
-fail : Applicative m => e -> BParser e r m a
+fail : Monad m => e -> BParser e r m a
 fail err = P $ \_ => pure $ Fail $ Left err
 
 export
 ntimes : Monad m => (n : Nat) -> BParser e r m a -> BParser e r m (Vect n a)
 ntimes    Z  p = pure []
-ntimes (S n) p = [| p :: (ntimes n p) |]
+ntimes (S n) p = pure $ !p :: !(ntimes n p)
 
 fin_range : (n : Nat) -> List (Fin n)
 fin_range _ = toList Fin.range
